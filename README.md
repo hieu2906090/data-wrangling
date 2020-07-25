@@ -568,4 +568,144 @@ We then using the nodemon instead of regular node listing-5.1.js like this:
 nodemon listing-5.1.js
 ```
 
+(128) When we read the CSV file using Data-Forge, it gives us a DataFrame object that con- tains the data set.
+(129) One useful thing that Data-Forge does is summarize the types that are in our data set. The output in figure 5.14 is produced by the Data-Forge function detectTypes, which scans the data set and produces a new table that shows the frequency of different types in our data.
+
+Instruct DataForge for each col datatype:
+
+```js
+const dataForge = require('data-forge');
+
+dataForge.readFile("./data/monthly_crashes-cut-down.csv")
+    .parseCSV()
+    .then(dataFrame => {
+        dataFrame = dataFrame.parseFloats([
+            "Month#", 
+            "Year", 
+            "Crashes", 
+            "Fatalities", 
+            "Hospitalized"
+        ]);
+        console.log(dataFrame.detectTypes().toString());
+    })
+    .catch(err => {
+        console.error(err && err.stack || err);
+    });
+```
+
+#### 4.2. Compute the trend column
+
+(130) The general workaround is: Extract the Fatalities col and calculate the trend then write back to the file with new column (Trend).
+
+- First we get the Fatalities for data inspection:
+
+```js
+...
+dataFrame
+.getSeries("Fatalities") .head(3)
+.toString()
+...
+```
+
+- Secondly, using FormulaJS which is the implementation of most Excel formula. Using FORECAST func on the extracted Months and Fatalities cols.
+
+```js
+dataForge.readFile("./data/monthly_crashes-cut-down.csv")
+    .parseCSV()
+    .then(dataFrame => {
+        dataFrame = dataFrame.parseFloats([
+            "Month#", "Year", "Crashes", "Fatalities", 
+            "Hospitalized"
+        ]);
+        const monthNoSeries = dataFrame.getSeries("Month#");
+        const xValues = monthNoSeries.head(6).toArray();
+        const fatalitiesSeries = dataFrame.getSeries("Fatalities");
+        const yValues = fatalitiesSeries.head(6).toArray();
+        const nextMonthNo = monthNoSeries.skip(6).first();
+        const nextMonthFatalitiesForecast = formulajs.FORECAST(nextMonthNo, yValues, xValues);
+        console.log('Forecasted fatalities: ' + nextMonthFatalitiesForecast);
+    })
+    .catch(err => {
+        console.error(err && err.stack || err);
+    });
+```
+
+- Thirdly, using the built in rollingWindow function of DataForge Library to calc the trend every 6 (mont, fatal).
+
+(133) Note in listing 5.11 how we use setIndex to set the Month# column as the index for the DataFrame. Having an index on the DataFrame allows the new Trend column to be integrated into it using the withSeries function that you can see toward the end of the code listing.
+
+```js
+dataForge.readFile("./data/monthly_crashes-cut-down.csv")
+    .parseCSV()
+    .then(dataFrame => {
+        dataFrame = dataFrame
+            .parseFloats([
+                 "Month#", "Year", "Crashes",
+                "Fatalities", "Hospitalized"
+            ])
+            .setIndex("Month#");
+        const fatalitiesSeries = dataFrame.getSeries("Fatalities");
+        const fatalitiesSeriesWithForecast = fatalitiesSeries.rollingWindow(6)
+            .select(window => {
+                const fatalitiesValues = window.toArray();
+                const monthNoValues = window.getIndex().toArray();
+                const nextMonthNo = monthNoValues[monthNoValues.length-1] + 1;
+                return [
+                    nextMonthNo,
+                    formulajs.FORECAST(nextMonthNo, fatalitiesValues, monthNoValues)
+                ];
+            })
+            .withIndex(pair => pair[0])
+            .select(pair => pair[1]);
+        const dataFrameWithForecast = dataFrame.withSeries({ Trend: fatalitiesSeriesWithForecast });
+        console.log(dataFrameWithForecast.toString());
+    })
+    .catch(err => {
+        console.error(err && err.stack || err);
+    });
+```
+
+#### 4.3. Outputing a new CSV file
+
+```js
+return dataFrameWithForecast
+.asCSV() .writeFile("./output/trend_output.csv");
+```
+
+### 5. Explore coding in the browser
+
+(135) Live-server gives you an instant web server that works as illustrated in figure 5.21. We don’t need to hand-code a web server to start prototyping our web-based visualization—
+this is great because we’re prototyping and we want to move quickly.
+
+```bash
+npm install –g live-server
+```
+
+```html
+<script src="/bower_components/jquery/dist/jquery.min.js"></script>
+<script src="/bower_components/Flot/jquery.flot.js"></script>
+<script src="bower_components/data-forge/data-forge.dist.js"></script>
+<script>
+    $.get("/output/trend_output.csv")
+        .then(response => {
+            var dataFrame = new dataForge
+                .fromCSV(response) .parseFloats(["Month#", "Trend"])
+                .setIndex("Month#");
+            var data = dataFrame .getSeries("Trend")
+                .toPairs(); $.plot("#placeholder", [ data ]);
+        })
+        .catch(err => {
+            console.error(err && err.stack || err);
+        })
+</script>
+```
+
+>![Nodemon and live-server in action](./readme-dtwl/nodemon-live-server.png)
+
+## C6 - CLEAN AND PREPARE
+
+![C6 toolkit](./readme-dtwl/c6-toolkit.png)
+
+
+
 
