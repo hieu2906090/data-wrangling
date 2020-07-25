@@ -554,4 +554,18 @@ We’ll create a new Trend column in our data set. Using Excel’s FORECAST func
 
 ### 4. Explore data using NOdeJS
 
+#### 4.1. Using nodemon
+
+(123) Install nodemon globally (live-server and nodemon to be global packages)
+
+```bash
+npm install -g nodemon
+```
+
+We then using the nodemon instead of regular node listing-5.1.js like this:
+
+```bash
+nodemon listing-5.1.js
+```
+
 
