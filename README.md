@@ -1038,3 +1038,132 @@ openCsvInputStream(inputFilePath)
 node install --save bfj
 ```
 
+![Create readable JSON stream](./readme-dtwl/readable-json-stream.png)
+![Writeable Json output stream](./readme-dtwl/writable-json-stream.png)
+
+(187) A point to note in listing 7.6 is how we use bfj’s walk function to walkthe structure of
+the JSON file.
+
+```js
+function openJsonInputStream (inputFilePath ) {
+
+    const jsonInputStream = new stream.Readable({ objectMode: true });
+    jsonInputStream._read = () => {}; // Must include, otherwise we get an error.
+
+    const fileInputStream = fs.createReadStream(inputFilePath);
+
+    let curObject = null;
+    let curProperty = null;
+
+    const emitter = bfj.walk(fileInputStream);
+
+    emitter.on(bfj.events.object, () => {
+        curObject = {};
+    });
+
+    emitter.on(bfj.events.property, name => {
+        curProperty = name;
+    });
+
+    let onValue = value => {
+        curObject[curProperty] = value;
+        curProperty = null;
+    };
+
+    emitter.on(bfj.events.string, onValue);
+    emitter.on(bfj.events.number, onValue);
+    emitter.on(bfj.events.literal, onValue);
+
+    emitter.on(bfj.events.endObject, () => {
+        jsonInputStream.push(curObject); // Push results as they are streamed from the file.
+
+        curObject = null; // Finished processing this object.
+    });
+
+    emitter.on(bfj.events.endArray, () => {
+        jsonInputStream.push(null); // Signify end of stream.
+    });
+
+    emitter.on(bfj.events.error, err => {
+        jsonInputStream.emit("error", err);
+    });
+
+    return jsonInputStream;
+};
+```
+
+***Create output JSON stream***
+
+```js
+function openJsonOutputStream (outputFilePath) {
+
+    const fileOutputStream = fs.createWriteStream(outputFilePath);
+    fileOutputStream.write("[");
+
+    let numRecords = 0;
+
+    const jsonOutputStream = new stream.Writable({ objectMode: true });
+    jsonOutputStream._write = (chunk, encoding, callback) => {
+        if (numRecords > 0) {
+            fileOutputStream.write(",\n");
+        }
+
+        // Output a single row of a JSON array.
+        const jsonData = JSON.stringify(chunk);
+        fileOutputStream.write(jsonData);
+        ++numRecords;
+        callback();
+    };
+
+    jsonOutputStream.on("finish", () => { // When the CSV stream is finished, close the output file stream.
+        fileOutputStream.write("]");
+        fileOutputStream.end();
+    });
+
+    return jsonOutputStream;
+};
+```
+
+***Finally we can now transform our massive JSON file***
+
+```js
+openJsonInputStream(inputFilePath)
+    .pipe(convertTemperatureStream())
+    .pipe(openJsonOutputStream(outputFilePath))
+    .on("error", err => {
+        console.error("An error occurred while transforming the JSON file.");
+        console.error(err);
+    });
+```
+
+## C8 - WORKING WITH MOUNTAIN OF DATA
+
+## C9 - PRACTICAL DATA ANALYSIS
+
+![C9 Toolkit](./readme-dtwl/c9-toolkit.png)
+![C9 Toolkit cont](readme-dtwl/c9-toolkit-cont.png)
+
+### 1. Basic data summerization
+
+***Sum***
+
+***Average***
+
+***Standard Deviation***
+
+### 2. Group and Summerize
+
+### 3. Understanding the relationships
+
+## C10 - Browser-based Visualization
+
+## C11 - Server-side Visualization
+
+## C12 - Live Data
+
+## C13 - Advanced visualization with D3
+
+## C14 - Getting to production
+
+
+
