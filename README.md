@@ -706,6 +706,335 @@ npm install –g live-server
 
 ![C6 toolkit](./readme-dtwl/c6-toolkit.png)
 
+(145) We’d like to work effectively with data that’s problem-free to the extent that it’s accurate for our business needs. Let’s get into it.
+
+() We need to do this for the following reasons:
+
+- To make sure we don’t draw the wrong conclusions and make bad decisions based on broken or inaccurate data.
+- To avoid negative business impact—for example, losing trust with customers/ clients who notice broken data.
+- Working with data that’s clean, accurate, and reliable makes our job easier and more straightforward.
+- We should fix data problems early, when they’re cheap to fix. The longer you leave them, the more expensive they are to rectify.
+- We may need to prepare our data offline for efficient use in production. To get timely results so that we can take quick action, we need data that’s already in the best format to be used with adequate performance.
+
+![Data pipeline with cleanup](readme-dtwl/data-pipeline-with-cleanup.png)
+
+### 1. Identify bad data
+
+(147) My approach is to analyze a small portion of data by eye, then make assumptions about how it’s structured and formatted.
+(148) One final way to detect bad data that you might want to consider is to crowd-source the problem and allow your users to find and report broken data.
+
+### 2. Kinds of problems
+
+The kinds of problems we might see in data are many and varied. Here are several examples for illustration:
+
+- Extra white space—Blank rows or whitespace around field values.
+- Missing data—Empty, null, or NaN fields.
+- Unexpected data —Can your code handle new and unexpected values?
+- Inaccurate data—Sensor readings that are off by a certain amount.
+- Inconsistencies—Street and St, Mister and Mr, data in different currencies, incon-
+sistent capitalization.
+- Badly formatted fields—Email, phone number, misspelled categories, and so on.
+- Broken data—Date/time with missing time zone or faulty sensor readings.
+- Irrelevant data—Data that isn’t useful to us.
+- Redundant data—Data that’s duplicated.
+- Inefficient data—Data that isn’t organized for effective use.
+- Too much data—We have more data than we can deal with.
+
+### 3. Response to bad data
+
+- We can fix the data—If that’s possible.
+- We can optimize the data—If it’s in an ineffective or inefficient format.
+- We could ignore the problem—We need to ask: what’s the worst that could happen?
+- We can work around the problem—Maybe we can deal with the problem in produc- tion, rather than offline?
+- We could filter out the broken data—Maybe it costs more to fix than it’s worth to us.
+- We could generate the data again—If possible, maybe we can fix the source of the problem and then capture or generate the data from scratch. If the data was cheap to generate in the first place, regeneration might be less expensive than
+trying to fix the data.
+
+### 4. Technique for fixing the bad data
+
+![Fixing data techniques](readme-dtwl/fixing-data-technique.png)
+
+#### 4.1. Cleaning our dataset
+
+(151) To rewrite every row in our data set, we’ll use the JavaScript map function.
+
+```js
+var outputData = inputData.map(transformRow);
+```
+
+![Map func diagram in JS](readme-dtwl/map-func-js.png)
+
+>The difference between using Object.assign() and spread()
+<https://stackoverflow.com/questions/38462000/difference-between-object-assign-and-object-spread/38462381>
+>
+```js
+const a = { name: 'Joe Bloggs' }
+const b = { ...a, age: 27 };
+console.log(a === b) //=> false
+
+const a = { name: 'Joe Bloggs' }
+const b = Object.assign(a, { age: 27 });
+console.log(a === b) //=> true
+```
+
+(153) General code pattern for transform data
+
+```js
+function transformRow (inputRow) {
+    const outputRow = Object.assign({}, inputRow);
+    // TODO: Your code here to transform the row of data.
+    return outputRow;
+}
+
+function transformData (inputData) {
+    return inputData.map(transformRow);
+}
+
+//Import data -> transform -> write to file
+```
+
+#### 4.2. Filtering data
+
+(155) As always, take care not to overwrite your source data.
+
+```js
+var outputData = inputData.filter(filterRow);
+```
+
+(157) General Pattern for filtering
+
+```js
+function filterRow (inputRow) {
+// TODO: Your predicate here.
+// Return true to preserve the row or false to remove it.
+    const preserveRow = true;
+    return preserveRow;
+ }
+function transformData (inputData) {
+    return inputData.filter(filterRow);
+};
+
+//Code to do read file -> filter -> export to file
+```
+
+#### 4.3. Filtering columns of data
+
+(158) Javascript code to delete column of data
+
+```js
+delete outputRow.reef_type;
+
+// Using Data-Forge lib
+function transformData (inputDataFrame) {
+    return inputDataFrame.dropSeries("reef_type");
+}
+```
+
+### 5. Preparing our data for effective use
+
+#### 5.1. Aggregating data
+
+(160) To aggregate our data, we perform the following steps:
+1 The source data is organized into buckets based on the reef_name field.
+2 For each group of records, we compute the sum of the transects_length field.
+3 Finally, a new data set is created with a single record per reef and containing the
+aggregated data.
+
+```js
+function transformData (inputDataFrame) {
+    return inputDataFrame
+        .parseFloats("transects_length")
+        .groupBy(inputRow => inputRow.reef_name)
+        .select(group => {
+            return {
+                reef_name: group.first().reef_name,
+                transects_length: group
+                    .deflate(row => row.transects_length)
+                    .sum(),
+            };
+        })
+        .inflate();
+}
+
+dataForge.readFile(inputFileName)
+    .parseCSV()
+    .then(inputDataFrame => {
+        const outputDataFrame = transformData(inputDataFrame);
+        return outputDataFrame
+            .asCSV()
+            .writeFile(outputFileName);
+    })
+    .then(() => {
+        console.log("Done!");
+    })
+    .catch(err => {
+        console.error("Error!");
+        console.error(err && err.stack || err);
+    });
+```
+
+#### 5.2. Combining data from different files using globby
+
+```bash
+npm install –-save globby
+```
+
+(161) Various methods exist to combine data such as this:
+
+- Concatenate the rows of the files.
+- Merge row by row.
+- Join the data by matching a field (as with a SQL join operation).
+
+(161) To concatenate multiple files, we perform the following process:
+
+1 Locate and read multiple CSV files into memory.
+
+2 Use the JavaScript array concat function to concatenate all records into a single array.
+
+3 Write the concatenated array into a single combined output file.
+
+![Using globby to concat files](readme-dtwl/globby-concat-files.png)
+
+(163) The main pur- pose of using reduce here is to merge the sequence of asynchronous operations into a single promise; this allows us to use that one promise to manage the whole chain of async operations.
+
+#### 5.3. Splitting data into seperate files
+
+### 6. Building a data processing pipeline using DataForge
+
+## C7 - WORKING WITH LARGE DATA FILE
+
+### 1. Chapter 7 Toolkit
+
+![C7 Toolkit](./readme-dtwl/c7-toolkit.png)
+
+(171) Loading an entire data file into memory is simple, and it makes our data-wrangling process straightforward. Unfortunately, it doesn’t work for huge files.
+
+>When loading a file into memory to be parsed as JSON or CSV, we’re limited by the max string size
+in Node.js: around 536 MB as of Node v8.
+
+### 2. Incremental core data processing
+
+![Fitting Chunk data to memory](readme-dtwl/fit-data-chunk-to-memory.png)
+
+(174) The CDR is an array of JavaScript objects, where each object is a record from our data set.
+
+![Chunk file with NodeJS Streaming](readme-dtwl/chunk-file-node-js.png)
+
+![Pipe input and output stream](readme-dtwl/pipe-input-output-stream.png)
+
+(176) The interesting thing about piping is that we can now add any number of intermediate transformation stages by piping our stream through one or more transformation streams.
+
+![Transformation pipe](./readme-dtwl/transformation-pipe.png)
+
+(177) To create a transformation like this for a Node.js stream, we need to instantiate the Transform class.
+
+***Promises vs Streams***
+
+(178) A promise allows you to retrieve a single result. A stream allows you to retrieve a continuous sequence of results.
+
+### 3. Transform huge CSV file
+
+(178) Papa Parse doesn’t provide us with a readable stream that we can easily pipe to another stream.
+
+(180) So, what’s happening here?
+
+1. We’re opening a readable stream for CSV data. The chunks of data we’re stream- ing here are expressed in the core data representation.
+2. We then pipe the CSV data through a transformation stream. This is where we convert the temperature fields to degrees Celsius.
+3. Finally, we pipe the transformed data to a writable stream for CSV data.
+
+***B1: Create a readable CSV file stream.***
+
+```js
+function openCsvInputStream (inputFilePath) {
+
+    const csvInputStream = new stream.Readable({ objectMode: true }); // Create a stream that we can read data records from, note that 'object mode' is enabled.
+    csvInputStream._read = () => {}; // Must include, otherwise we get an error.
+
+    const fileInputStream = fs.createReadStream(inputFilePath); // Create stream for reading the input file.
+    papaparse.parse(fileInputStream, {
+        header: true,
+        dynamicTyping: true,
+
+        // We may not need this, but don't want to get halfway through the massive file before realising it is needed.
+        skipEmptyLines: true,
+
+        step: (results) => { // Handles incoming rows of CSV data.
+            for (let row of results.data) {
+                csvInputStream.push(row); // Push results as they are streamed from the file.
+            }
+        },
+
+        complete: () => { // File read operation has completed.
+            csvInputStream.push(null); // Signify end of stream.
+        },
+
+        error: (err) => { // An error has occurred.
+            csvInputStream.emit("error", err); // Pass on errors.
+        }
+    });
+
+    return csvInputStream;
+};
+```
+
+(181) The complete callback is invoked when the entire CSV file has been parsed. At this point, no more CSV rows will come through, and we call the push function with a null parameter to indicate to the stream that we’ve finished.
+
+***B2: Opening a writeable CSV file stream.***
+
+```js
+function openCsvOutputStream (outputFilePath) {
+
+    let firstOutput = true;
+    const fileOutputStream = fs.createWriteStream(outputFilePath); // Create stream for writing the output file.
+
+    const csvOutputStream = new stream.Writable({ objectMode: true }); // Create stream for writing data records, note that 'object mode' is enabled.
+    csvOutputStream._write = (chunk, encoding, callback) => { // Handle writes to the stream.
+        const outputCSV = papaparse.unparse([chunk], {
+            header: firstOutput
+        });
+        fileOutputStream.write(outputCSV + "\n");
+        firstOutput = false;
+        callback();
+    };
+
+    csvOutputStream.on("finish", () => { // When the CSV stream is finished, close the output file stream.
+        fileOutputStream.end();
+    });
+
+    return csvOutputStream;
+};
+```
+
+***B3: Pipe the transform streamt o the input and output***
+
+```js
+function convertTemperatureStream () {
+    const transformStream = new stream.Transform({ objectMode: true }); // Create a bidirectional stream in 'object mode'.
+    transformStream._transform = (inputChunk, encoding, callback) => { // Callback to execute on chunks that are input.
+        const outputChunk = transformRow(inputChunk); // Transform the chunk.
+        transformStream.push(outputChunk); // Pass the converted chunk to the output stream.
+        callback();
+    };
+    return transformStream;
+};
+
+...
 
 
+openCsvInputStream(inputFilePath)
+    .pipe(convertTemperatureStream())
+    .pipe(openCsvOutputStream(outputFilePath))
+    .on("error", err => {
+        console.error("An error occurred while transforming the CSV file.");
+        console.error(err);
+    });
+```
+
+### 4. Transform huge JSON file
+
+(184) It’s more difficult in this case due to the nature of the JSON data format.
+
+```bash
+node install --save bfj
+```
 
